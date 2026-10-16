@@ -105,9 +105,16 @@ def create_report(file_path: str, output_path: str | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def main() -> int:
     if len(sys.argv) not in (2, 3):
         print("Usage: python csv_report.py <file.csv> [report.json]")
-        sys.exit(1)
+        return 1
 
-    sys.exit(create_report(sys.argv[1], sys.argv[2] if len(sys.argv) == 3 else None))
+    return create_report(
+        sys.argv[1],
+        sys.argv[2] if len(sys.argv) == 3 else None,
+    )
+
+
+if __name__ == "__main__":
+    sys.exit(main())

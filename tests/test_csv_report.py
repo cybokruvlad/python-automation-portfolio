@@ -155,3 +155,92 @@ def test_create_report_handles_large_csv(tmp_path):
     result = create_report(str(csv_file))
 
     assert result == 0
+
+
+def test_create_report_rejects_rows_with_extra_values(tmp_path, capsys):
+    csv_file = tmp_path / "extra_values.csv"
+    csv_file.write_text("name,city\nHoussam,Rabat,Extra\n", encoding="utf-8")
+
+    result = create_report(str(csv_file))
+
+    assert result == 1
+    assert "more values than the header" in capsys.readouterr().out
+
+
+def test_create_report_counts_short_rows_as_missing(tmp_path, capsys):
+    csv_file = tmp_path / "short_rows.csv"
+    csv_file.write_text("name,city\nHoussam\n", encoding="utf-8")
+
+    result = create_report(str(csv_file))
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "- city: 0 filled, 1 missing, 0 unique" in output
+
+
+def test_create_report_accepts_header_only_csv(tmp_path):
+    csv_file = tmp_path / "header_only.csv"
+    json_file = tmp_path / "report.json"
+    csv_file.write_text("name,city\n", encoding="utf-8")
+
+    result = create_report(str(csv_file), str(json_file))
+
+    assert result == 0
+    report = json.loads(json_file.read_text(encoding="utf-8"))
+    assert report["rows"] == 0
+    assert report["columns"] == 2
+    assert report["duplicate_rows"] == 0
+
+
+def test_json_missing_values_contains_only_columns_with_missing_data(tmp_path):
+    csv_file = tmp_path / "complete.csv"
+    json_file = tmp_path / "report.json"
+    csv_file.write_text("name,city\nHoussam,Rabat\n", encoding="utf-8")
+
+    result = create_report(str(csv_file), str(json_file))
+
+    assert result == 0
+    report = json.loads(json_file.read_text(encoding="utf-8"))
+    assert report["missing_values"] == {}
+
+
+def test_create_report_does_not_write_json_for_invalid_csv(tmp_path, capsys):
+    csv_file = tmp_path / "invalid.csv"
+    json_file = tmp_path / "report.json"
+    csv_file.write_text('name,age\n"Houssam,20\n', encoding="utf-8")
+
+    result = create_report(str(csv_file), str(json_file))
+
+    assert result == 1
+    assert not json_file.exists()
+    assert "Error reading CSV:" in capsys.readouterr().out
+
+
+def test_cli_without_arguments_shows_usage(monkeypatch, capsys):
+    import sys
+
+    from csv_report import main
+
+    monkeypatch.setattr(sys, "argv", ["csv_report.py"])
+
+    try:
+        main()
+    except SystemExit as error:
+        assert error.code == 1
+
+    assert "Usage:" in capsys.readouterr().out
+
+
+def test_cli_with_invalid_argument_count_shows_usage(monkeypatch, capsys):
+    import sys
+
+    from csv_report import main
+
+    monkeypatch.setattr(sys, "argv", ["csv_report.py", "one.csv", "two.json", "three"])
+
+    try:
+        main()
+    except SystemExit as error:
+        assert error.code == 1
+
+    assert "Usage:" in capsys.readouterr().out
