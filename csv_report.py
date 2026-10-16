@@ -1,4 +1,3 @@
-
 import csv
 import json
 import sys
@@ -13,36 +12,68 @@ def create_report(file_path: str, output_path: str | None = None) -> int:
         print(f"Error: File not found: {path}")
         return 1
 
+    missing = Counter()
+    unique_values: dict[str, set[str]] = {}
+    seen_rows: set[tuple[str | None, ...]] = set()
+    duplicate_rows = 0
+    row_count = 0
+
     try:
         with path.open("r", encoding="utf-8-sig", newline="") as file:
-            reader = csv.DictReader(file)
+            reader = csv.DictReader(file, strict=True)
 
             if not reader.fieldnames:
                 print("Error: CSV file has no header.")
                 return 1
 
             columns = reader.fieldnames
-            rows = list(reader)
+            if len(columns) != len(set(columns)):
+                print("Error: CSV contains duplicate column names.")
+                return 1
+
+            unique_values = {column: set() for column in columns}
+
+            for row in reader:
+                if None in row:
+                    print("Error reading CSV: row has more values than the header.")
+                    return 1
+
+                row_count += 1
+                row_key = tuple(row.get(column) for column in columns)
+
+                if row_key in seen_rows:
+                    duplicate_rows += 1
+                else:
+                    seen_rows.add(row_key)
+
+                for column in columns:
+                    value = row.get(column)
+                    if value is None or not value.strip():
+                        missing[column] += 1
+                    else:
+                        unique_values[column].add(value.strip())
 
     except (OSError, UnicodeError, csv.Error) as error:
         print(f"Error reading CSV: {error}")
         return 1
 
-    missing = Counter()
-    for row in rows:
-        for column in columns:
-            if row.get(column) is None or not row[column].strip():
-                missing[column] += 1
+    column_stats = {
+        column: {
+            "filled": row_count - missing[column],
+            "missing": missing[column],
+            "unique": len(unique_values[column]),
+        }
+        for column in columns
+    }
 
     report = {
         "file": path.name,
-        "rows": len(rows),
+        "rows": row_count,
         "columns": len(columns),
         "column_names": columns,
         "missing_values": dict(missing),
-        "duplicate_rows": len(rows) - len(
-            {tuple(row.get(c) for c in columns) for row in rows}
-        ),
+        "column_stats": column_stats,
+        "duplicate_rows": duplicate_rows,
     }
 
     print(f"File: {report['file']}")
@@ -52,16 +83,10 @@ def create_report(file_path: str, output_path: str | None = None) -> int:
     print("\nColumn analysis:")
 
     for column in columns:
-        values = [
-            row.get(column, "").strip()
-            for row in rows
-            if row.get(column) is not None and row[column].strip()
-        ]
-        unique_count = len(set(values))
-        missing_count = missing[column]
+        stats = column_stats[column]
         print(
-            f"- {column}: {len(values)} filled, "
-            f"{missing_count} missing, {unique_count} unique"
+            f"- {column}: {stats['filled']} filled, "
+            f"{stats['missing']} missing, {stats['unique']} unique"
         )
 
     if output_path:

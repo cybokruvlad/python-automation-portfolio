@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local test artifacts
+*.bak
+report.json
+.pytest_cache/
+__pycache__/
